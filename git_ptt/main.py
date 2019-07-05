@@ -19,8 +19,10 @@ LOG = logging.getLogger(__name__)
 @click.option('-R', '--remote')
 @click.option('-s', '--since')
 @click.option('-p', '--prefix')
+@click.option('-P', '--prefix-branch', is_flag=True)
 @click.argument('revisions', nargs=-1)
-def main(header, delete, query, verbose, _continue, remote, since, prefix,
+def main(header, delete, query, verbose, _continue, remote, since,
+         prefix, prefix_branch,
          revisions):
     try:
         loglevel = ['WARNING', 'INFO', 'DEBUG'][verbose]
@@ -33,6 +35,12 @@ def main(header, delete, query, verbose, _continue, remote, since, prefix,
 
     repo = git.Repo()
     conf = repo.config_reader()
+
+    if prefix_branch:
+        if prefix:
+            raise click.ClickException(
+                'Must select one of --prefix/--prefix-branch')
+        prefix = '{}/'.format(repo.active_branch.name)
 
     if remote is None:
         try:
