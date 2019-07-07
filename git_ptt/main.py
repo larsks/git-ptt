@@ -83,7 +83,8 @@ def main(header, delete, query, verbose, _continue, remote, since,
             print('{}: {}'.format(com.hexsha[:7], target))
         elif delete:
             LOG.warning('deleting branch %s from remote %s', target, rem)
-            rem.push(':refs/heads/{}'.format(target))
+            rem.push(':refs/heads/{}'.format(target),
+                     force_with_lease=True)
         else:
             LOG.warning('pushing %s to branch %s on remote %s', com.hexsha[:7],
                         target, rem)
