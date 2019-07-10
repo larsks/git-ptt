@@ -18,11 +18,12 @@ LOG = logging.getLogger(__name__)
 @click.option('-c', '--continue', '_continue', is_flag=True)
 @click.option('-R', '--remote')
 @click.option('-s', '--since')
+@click.option('-n', '--name-only', is_flag=True)
 @click.option('-p', '--prefix')
 @click.option('-P', '--prefix-branch', is_flag=True)
 @click.argument('revisions', nargs=-1)
 def main(header, delete, query, verbose, _continue, remote, since,
-         prefix, prefix_branch,
+         prefix, prefix_branch, name_only,
          revisions):
     try:
         loglevel = ['WARNING', 'INFO', 'DEBUG'][verbose]
@@ -91,7 +92,10 @@ def main(header, delete, query, verbose, _continue, remote, since,
 
     for com, target in targets:
         if query:
-            print('{}: {}'.format(com.hexsha[:7], target))
+            if name_only:
+                print(target)
+            else:
+                print('{}: {}'.format(com.hexsha[:7], target))
         elif delete:
             LOG.warning('deleting branch %s from remote %s', target, rem)
             rem.push(':refs/heads/{}'.format(target),
