@@ -37,10 +37,21 @@ def main(header, delete, query, verbose, _continue, remote, since,
     conf = repo.config_reader()
 
     if prefix_branch:
+        LOG.debug('setting prefix from --prefix-branch')
         if prefix:
             raise click.ClickException(
                 'Must select one of --prefix/--prefix-branch')
         prefix = '{}/'.format(repo.active_branch.name)
+
+    if prefix is None:
+        LOG.debug('setting prefix from branch config')
+        try:
+            prefix = conf.get('ptt "{}"'.format(repo.active_branch.name),
+                              'prefix')
+        except configparser.Error:
+            pass
+
+    LOG.debug('prefix: %s', prefix)
 
     if remote is None:
         try:
