@@ -56,10 +56,12 @@ def main(header, delete, query, verbose, _continue, remote, since,
 
     if remote is None:
         try:
-            remote = conf.get('ptt', 'remote')
+            remote = conf.get(
+                'ptt "{}"'.format(repo.active_branch.name), 'remote')
         except configparser.Error:
             remote = 'origin'
 
+    LOG.debug('remote: %s', remote)
     rem = repo.remote(remote)
 
     if since and revisions:
