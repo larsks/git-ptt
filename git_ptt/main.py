@@ -126,36 +126,36 @@ def main(ctx, verbose, repo, remote):
 
 
 @main.command()
-@click.argument('since', default='master')
+@click.option('-b', '--base', default='master')
 @click.pass_obj
-def ls(ptt, since):
+def ls(ptt, base):
     '''list branch mappings in the local repository'''
-    for branch, commits in ptt.find_branches(since).items():
+    for branch, commits in ptt.find_branches(base).items():
         print(branch)
         for commit in commits:
             print(f'- {str(commit)[:7]}: {commit.message.splitlines()[0]}')
 
 
 @main.command()
-@click.argument('since', default='master')
+@click.option('-b', '--base', default='master')
 @click.pass_obj
 @needs_remote
-def check(ptt, remote, since):
+def check(ptt, remote, base):
     '''verify that mapped branches match remote references'''
     LOG.info('updating remote %s', remote)
     remote.update()
-    for branch, commits in ptt.find_branches(since).items():
+    for branch, commits in ptt.find_branches(base).items():
         in_sync = branch in remote.refs and remote.refs[branch].commit == commits[0]
         print(f'{remote}:{branch} {str(commits[0])[:7]} {"in sync" if in_sync else "needs update"}')
 
 
 @main.command()
-@click.argument('since', default='master')
+@click.option('-b', '--base', default='master')
 @click.pass_obj
 @needs_remote
-def push(ptt, remote, since):
+def push(ptt, remote, base):
     '''push commits to mapped remote branches'''
-    for branch, commits in ptt.find_branches(since).items():
+    for branch, commits in ptt.find_branches(base).items():
         head = str(commits[0])
         LOG.warning('pushing commit %s -> %s:%s', head[:7], remote, branch)
         res = remote.push(f'+{head}:refs/heads/{branch}')
@@ -164,12 +164,12 @@ def push(ptt, remote, since):
 
 
 @main.command()
-@click.argument('since', default='master')
+@click.option('-b', '--base', default='master')
 @click.pass_obj
 @needs_remote
-def delete(ptt, remote, since):
+def delete(ptt, remote, base):
     '''delete mapped branches from remote repository'''
-    for branch, commits in ptt.find_branches(since).items():
+    for branch, commits in ptt.find_branches(base).items():
         LOG.warning('deleting branch %s:%s', remote, branch)
         remote.push(f':refs/heads/{branch}',
                     force_with_lease=True)
