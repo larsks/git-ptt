@@ -186,3 +186,18 @@ def delete(ptt, remote, base):
         LOG.warning('deleting branch %s:%s', remote, branch)
         remote.push(f':refs/heads/{branch}',
                     force_with_lease=True)
+
+
+@main.command()
+@click.option('-b', '--base', default='master')
+@click.argument('branch')
+@click.pass_obj
+def checkout(ptt, base, branch):
+    '''create new branch from mapped branch'''
+    branches = ptt.find_branches(base)
+    if branch not in branches:
+        raise click.ClickException(f'no ptt branch named "{branch}"')
+
+    new_head = branches[branch][0]
+    new_branch = ptt.repo.create_head(branch, new_head)
+    new_branch.checkout()
