@@ -138,6 +138,19 @@ def ls(ptt, base):
 
 @main.command()
 @click.option('-b', '--base', default='master')
+@click.argument('branch')
+@click.pass_obj
+def head(ptt, base, branch):
+    '''show head of mapped branch'''
+    branches = ptt.find_branches(base)
+    if branch in branches:
+        print(branches[branch][0])
+    else:
+        raise click.ClickException(f'no such branch named {branch}')
+
+
+@main.command()
+@click.option('-b', '--base', default='master')
 @click.pass_obj
 @needs_remote
 def check(ptt, remote, base):
