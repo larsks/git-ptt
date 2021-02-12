@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import configparser
+import functools
 import logging
 import re
 
@@ -10,21 +10,67 @@ import git
 LOG = logging.getLogger(__name__)
 
 
-@click.command()
-@click.option('-h', '--header', default='X-branch-name')
-@click.option('-q', '--query', is_flag=True)
-@click.option('-d', '--delete', is_flag=True)
+class PTT:
+    default_header = 'x-branch-name'
+
+    def __init__(self, repo, remote=None, header=None):
+        self.repo = repo
+        self.remote = remote
+        self.header = header or self.default_header
+
+    def find_branches(self, since):
+        since = self.repo.commit(since)
+        rev = self.repo.head.commit
+        bundle = []
+        branches = {}
+
+        while True:
+            LOG.debug('inspecting commit %s', rev)
+            if rev == since:
+                break
+
+            bundle.append(rev)
+            if branch := self.branch_from_commit(rev):
+                LOG.info('found branch %s with %d commits', branch, len(bundle))
+                branches[branch] = bundle
+                bundle = []
+
+            rev = rev.parents[0]
+
+        return branches
+
+    def branch_from_commit(self, rev):
+        rev = self.repo.commit(rev)
+        pattern = re.compile(r'\s*{}: (?P<branch>\S+)'.format(self.header), re.IGNORECASE)
+        rev_message = rev.message
+        try:
+            rev_note = self.repo.git.notes('show', rev)
+        except git.exc.GitCommandError:
+            rev_note = ''
+
+        for content in [rev_message, rev_note]:
+            if match := pattern.match(content):
+                return match.group('branch')
+
+
+def needs_remote(func):
+    @functools.wraps(func)
+    def wrapper(ptt, *args, **kwargs):
+        if ptt.remote is None:
+            raise click.ClickException(f'{func.__name__} requires a valid remote')
+
+        return func(ptt, *args, **kwargs)
+
+    return wrapper
+
+
+@click.group(context_settings={'auto_envvar_prefix': 'GIT_PTT'})
 @click.option('-v', '--verbose', count=True)
-@click.option('-c', '--continue', '_continue', is_flag=True)
-@click.option('-R', '--remote')
-@click.option('-s', '--since')
-@click.option('-n', '--name-only', is_flag=True)
-@click.option('-p', '--prefix')
-@click.option('-P', '--prefix-branch', is_flag=True)
-@click.argument('revisions', nargs=-1)
-def main(header, delete, query, verbose, _continue, remote, since,
-         prefix, prefix_branch, name_only,
-         revisions):
+@click.option('-r', '--repo')
+@click.option('-R', '--remote', default='origin')
+@click.pass_context
+def main(ctx, verbose, repo, remote):
+
     try:
         loglevel = ['WARNING', 'INFO', 'DEBUG'][verbose]
     except IndexError:
@@ -34,77 +80,45 @@ def main(header, delete, query, verbose, _continue, remote, since,
         level=loglevel,
     )
 
-    repo = git.Repo()
-    conf = repo.config_reader()
+    repo = git.Repo(repo)
+    try:
+        remote = repo.remote(remote)
+        LOG.info('using remote %s', remote)
+    except ValueError:
+        remote = None
 
-    if prefix_branch:
-        LOG.debug('setting prefix from --prefix-branch')
-        if prefix:
-            raise click.ClickException(
-                'Must select one of --prefix/--prefix-branch')
-        prefix = '{}/'.format(repo.active_branch.name)
+    ctx.obj = PTT(repo, remote=remote)
 
-    if prefix is None:
-        LOG.debug('setting prefix from branch config')
-        try:
-            prefix = conf.get('ptt "{}"'.format(repo.active_branch.name),
-                              'prefix')
-        except configparser.Error:
-            pass
 
-    LOG.debug('prefix: %s', prefix)
+@main.command()
+@click.argument('since', default='master')
+@click.pass_obj
+def ls(ptt, since):
+    for branch, commits in ptt.find_branches(since).items():
+        print(branch)
+        for commit in commits:
+            print(f'- {str(commit)[:7]}: {commit.message.splitlines()[0]}')
 
-    if remote is None:
-        try:
-            remote = conf.get(
-                'ptt "{}"'.format(repo.active_branch.name), 'remote')
-        except configparser.Error:
-            remote = 'origin'
 
-    LOG.debug('remote: %s', remote)
-    rem = repo.remote(remote)
+@main.command()
+@click.argument('since', default='master')
+@click.pass_obj
+@needs_remote
+def push(ptt, since):
+    for branch, commits in ptt.find_branches(since).items():
+        head = str(commits[0])
+        LOG.warning('pushing commit %s -> %s:%s', head[:7], ptt.remote, branch)
+        res = ptt.remote.push(f'+{head}:refs/heads/{branch}')
+        if res:
+            LOG.warning(res)
 
-    if since and revisions:
-        raise click.ClickException('you cannot use --since and provide '
-                                   'a list of revisions')
 
-    if since:
-        revisions = repo.iter_commits('{}..'.format(since))
-
-    targets = []
-    for rev in revisions if revisions else ['HEAD']:
-        com = repo.commit(rev)
-        LOG.info('checking commit %s', com.hexsha[:7])
-
-        match = re.search(r'{}: (?P<name>\S+)'.format(
-            header.lower()), com.message.lower())
-        if not match:
-            if _continue:
-                LOG.warning('No branch name in %s', com.hexsha[:7])
-                continue
-            else:
-                raise click.ClickException(
-                    'No branch name in {}'.format(com.hexsha[:7]))
-
-        target = match.group(1)
-        if prefix:
-            target = '{}{}'.format(prefix, target)
-        LOG.info('found branch name %s for commit %s', target, com.hexsha[:7])
-        targets.append((com, target))
-
-    for com, target in targets:
-        if query:
-            if name_only:
-                print(target)
-            else:
-                print('{}: {}'.format(com.hexsha[:7], target))
-        elif delete:
-            LOG.warning('deleting branch %s from remote %s', target, rem)
-            rem.push(':refs/heads/{}'.format(target),
-                     force_with_lease=True)
-        else:
-            LOG.warning('pushing %s to branch %s on remote %s', com.hexsha[:7],
-                        target, rem)
-            res = rem.push('+{}:refs/heads/{}'.format(com.hexsha, target))
-            if res:
-                LOG.warning('res: %s', res)
+@main.command()
+@click.argument('since', default='master')
+@click.pass_obj
+@needs_remote
+def delete(ptt, since):
+    for branch, commits in ptt.find_branches(since).items():
+        LOG.warning('deleting branch %s:%s', ptt.remote, branch)
+        ptt.remote.push(f':refs/heads/{branch}',
+                        force_with_lease=True)
