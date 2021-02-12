@@ -140,6 +140,19 @@ def ls(ptt, since):
 @click.argument('since', default='master')
 @click.pass_obj
 @needs_remote
+def check(ptt, remote, since):
+    '''verify that mapped branches match remote references'''
+    LOG.info('updating remote %s', remote)
+    remote.update()
+    for branch, commits in ptt.find_branches(since).items():
+        in_sync = branch in remote.refs and remote.refs[branch].commit == commits[0]
+        print(f'{remote}:{branch} {str(commits[0])[:7]} {"in sync" if in_sync else "needs update"}')
+
+
+@main.command()
+@click.argument('since', default='master')
+@click.pass_obj
+@needs_remote
 def push(ptt, remote, since):
     '''push commits to mapped remote branches'''
     for branch, commits in ptt.find_branches(since).items():
