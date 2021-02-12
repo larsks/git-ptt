@@ -19,16 +19,17 @@ class PTT:
         self.remote = self.get_remote(remote)
         self.header = header or self.default_header
 
-    def find_branches(self, since):
-        since = self.repo.commit(since)
-        rev = self.repo.head.commit
+    def find_branches(self, refspec):
+        if '..' in refspec:
+            commits = self.repo.iter_commits(refspec)
+        else:
+            commits = self.repo.iter_commits(f'{refspec}..HEAD')
+
         bundle = []
         branches = {}
 
-        while True:
+        for rev in commits:
             LOG.debug('inspecting commit %s', rev)
-            if rev == since:
-                break
 
             bundle.append(rev)
             if branch := self.branch_from_commit(rev):
