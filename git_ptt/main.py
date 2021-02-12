@@ -43,7 +43,8 @@ class PTT:
 
     def branch_from_commit(self, rev):
         rev = self.repo.commit(rev)
-        pattern = re.compile(r'\s*{}: (?P<branch>\S+)'.format(self.header), re.IGNORECASE)
+        pattern = re.compile(r'^\s*{}: (?P<branch>\S+)$'.format(self.header),
+                             re.IGNORECASE | re.MULTILINE)
         rev_message = rev.message
         try:
             rev_note = self.repo.git.notes('show', rev)
@@ -51,7 +52,7 @@ class PTT:
             rev_note = ''
 
         for content in [rev_message, rev_note]:
-            if match := pattern.match(content):
+            if match := pattern.search(content):
                 return match.group('branch')
 
     def get_remote(self, remote):
