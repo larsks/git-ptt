@@ -110,6 +110,7 @@ def needs_remote(func):
 @click.option('-R', '--remote')
 @click.pass_context
 def main(ctx, verbose, repo, remote):
+    '''git-ptt is a tool for maintaining stacked pull requests'''
 
     try:
         loglevel = ['WARNING', 'INFO', 'DEBUG'][verbose]
@@ -128,6 +129,7 @@ def main(ctx, verbose, repo, remote):
 @click.argument('since', default='master')
 @click.pass_obj
 def ls(ptt, since):
+    '''list branch mappings in the local repository'''
     for branch, commits in ptt.find_branches(since).items():
         print(branch)
         for commit in commits:
@@ -139,6 +141,7 @@ def ls(ptt, since):
 @click.pass_obj
 @needs_remote
 def push(ptt, remote, since):
+    '''push commits to mapped remote branches'''
     for branch, commits in ptt.find_branches(since).items():
         head = str(commits[0])
         LOG.warning('pushing commit %s -> %s:%s', head[:7], remote, branch)
@@ -152,6 +155,7 @@ def push(ptt, remote, since):
 @click.pass_obj
 @needs_remote
 def delete(ptt, remote, since):
+    '''delete mapped branches from remote repository'''
     for branch, commits in ptt.find_branches(since).items():
         LOG.warning('deleting branch %s:%s', remote, branch)
         remote.push(f':refs/heads/{branch}',
