@@ -294,3 +294,30 @@ def branch(ptt, all_, force, selected):
 def shell(ptt):
     '''interactive shell with access to the PTT object'''
     code.interact(local=locals())
+
+
+@main.command()
+@click.pass_obj
+def stats(ptt):
+    '''show summary diff statistics for each mapped branch'''
+
+    commits = [(branch.name, branch.hexsha) for branch in ptt.branches]
+    master = ('master', ptt.repo.heads['master'].commit.hexsha)
+    table = []
+
+    for b1, b2 in zip([None] + commits, commits + [master]):
+        if b1 is None:
+            continue
+
+        res = ptt.repo.git.diff(b2[1], b1[1], numstat=True)
+        t_added = t_deleted = t_files = 0
+        for line in res.splitlines():
+            added, deleted, fn = line.split(None, 2)
+            t_added += int(added)
+            t_deleted += int(deleted)
+            t_files += 1
+
+        table.append((b1[0], t_added, t_deleted, t_added-t_deleted, t_files))
+
+    print(tabulate.tabulate(table,
+                            headers=['branch', 'added', 'deleted', 'delta', 'files']))
