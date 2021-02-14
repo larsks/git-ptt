@@ -4,6 +4,7 @@ import configparser
 import functools
 import logging
 import re
+import tabulate
 
 import click
 import git
@@ -153,16 +154,25 @@ def head(ptt, base, branch):
 
 
 @main.command()
-@click.option('-b', '--base', default='master')
 @click.pass_obj
 @needs_remote
-def check(ptt, remote, base):
+def check(ptt, remote):
     '''verify that mapped branches match remote references'''
     LOG.info('updating remote %s', remote)
     remote.update()
-    for branch, commits in ptt.find_branches(base).items():
-        in_sync = branch in remote.refs and remote.refs[branch].commit == commits[0]
-        print(f'{remote}:{branch} {str(commits[0])[:7]} {"in sync" if in_sync else "needs update"}')
+    results = []
+    for branch, commits in ptt.find_branches().items():
+        local_ref = commits[0]
+        remote_ref = remote.refs[branch].commit if branch in remote.refs else '-'
+
+        in_sync = local_ref == remote_ref
+        results.append(
+            (remote, branch, str(local_ref)[:7], str(remote_ref)[:7], in_sync)
+        )
+
+    print(tabulate.tabulate(
+        results,
+        headers=['remote', 'branch', 'local ref', 'remote ref', 'in sync']))
 
 
 @main.command()
