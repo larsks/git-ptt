@@ -256,3 +256,10 @@ def branch(ptt, all_, force, selected):
             ref = ptt.repo.heads[branch]
             LOG.warning('updating branch %s', branch)
             ptt.repo.git.update_ref(ref.path, commits[0])
+
+
+@main.command()
+@click.pass_obj
+def shell(ptt):
+    '''interactive shell with access to the PTT object'''
+    code.interact(local=locals())
