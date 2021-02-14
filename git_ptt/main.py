@@ -111,9 +111,10 @@ def needs_remote(func):
 @click.group(context_settings={'auto_envvar_prefix': 'GIT_PTT'})
 @click.option('-v', '--verbose', count=True)
 @click.option('-r', '--repo')
+@click.option('-b', '--base')
 @click.option('-R', '--remote')
 @click.pass_context
-def main(ctx, verbose, repo, remote):
+def main(ctx, verbose, repo, base, remote):
     '''git-ptt is a tool for maintaining stacked pull requests'''
 
     try:
@@ -126,27 +127,32 @@ def main(ctx, verbose, repo, remote):
     )
 
     repo = git.Repo(repo)
-    ctx.obj = PTT(repo, remote=remote)
+    ptt = PTT(repo, base=base, remote=remote)
+    ptt.update_refs()
+    ctx.obj = ptt
 
 
 @main.command()
-@click.option('-b', '--base', default='master')
+@click.option('-c', '--show-commits', is_flag=True)
+@click.argument('selected', nargs=-1)
 @click.pass_obj
-def ls(ptt, base):
+def ls(ptt, show_commits, selected):
     '''list branch mappings in the local repository'''
-    for branch, commits in ptt.find_branches(base).items():
-        print(branch)
-        for commit in commits:
-            print(f'- {str(commit)[:7]}: {commit.message.splitlines()[0]}')
+    for branch, commits in ptt.find_branches().items():
+        if selected and branch not in selected:
+            continue
+        print(f'{branch} {str(commits[0])[:7]}')
+        if show_commits:
+            for commit in commits:
+                print(f'- {str(commit)[:7]}: {commit.message.splitlines()[0]}')
 
 
 @main.command()
-@click.option('-b', '--base', default='master')
 @click.argument('branch')
 @click.pass_obj
-def head(ptt, base, branch):
+def head(ptt, branch):
     '''show head of mapped branch'''
-    branches = ptt.find_branches(base)
+    branches = ptt.find_branches()
     if branch in branches:
         print(branches[branch][0])
     else:
@@ -176,12 +182,14 @@ def check(ptt, remote):
 
 
 @main.command()
-@click.option('-b', '--base', default='master')
+@click.argument('selected', nargs=-1)
 @click.pass_obj
 @needs_remote
-def push(ptt, remote, base):
-    '''push commits to mapped remote branches'''
-    for branch, commits in ptt.find_branches(base).items():
+def push(ptt, remote, selected):
+    '''push mapped branches to remote'''
+    for branch, commits in ptt.find_branches().items():
+        if selected and branch not in selected:
+            continue
         head = str(commits[0])
         LOG.warning('pushing commit %s -> %s:%s', head[:7], remote, branch)
         res = remote.push(f'+{head}:refs/heads/{branch}')
@@ -190,12 +198,14 @@ def push(ptt, remote, base):
 
 
 @main.command()
-@click.option('-b', '--base', default='master')
 @click.pass_obj
+@click.argument('selected', nargs=-1)
 @needs_remote
-def delete(ptt, remote, base):
+def delete(ptt, remote, selected):
     '''delete mapped branches from remote repository'''
-    for branch, commits in ptt.find_branches(base).items():
+    for branch, commits in ptt.find_branches().items():
+        if selected and branch not in selected:
+            continue
         LOG.warning('deleting branch %s:%s', remote, branch)
         remote.push(f':refs/heads/{branch}',
                     force_with_lease=True)
