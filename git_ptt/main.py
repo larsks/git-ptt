@@ -192,15 +192,47 @@ def delete(ptt, remote, base):
 
 
 @main.command()
-@click.option('-b', '--base', default='master')
-@click.argument('branch')
+@click.option('-f', '--force', is_flag=True)
+@click.argument('selected', nargs=-1)
 @click.pass_obj
-def checkout(ptt, base, branch):
-    '''create new branch from mapped branch'''
-    branches = ptt.find_branches(base)
-    if branch not in branches:
-        raise click.ClickException(f'no ptt branch named "{branch}"')
+def prune(ptt, force, selected):
+    '''remove local git branches that match mapped branches'''
+    for branch, commits in ptt.find_branches().items():
+        if selected and branch not in selected:
+            continue
 
-    new_head = branches[branch][0]
-    new_branch = ptt.repo.create_head(branch, new_head)
-    new_branch.checkout()
+        if branch in ptt.repo.heads:
+            if ptt.repo.heads[branch].commit != commits[0] and not force:
+                LOG.warning('skipping branch %s (not in sync)', branch)
+                continue
+            elif ptt.repo.heads[branch].commit != commits[0] and force:
+                LOG.warning('deleting branch %s (not in sync)', branch)
+            else:
+                LOG.warning('deleting branch %s',  branch)
+
+            ptt.repo.git.branch('-D', branch)
+        else:
+            LOG.info('skipping branch %s (does not exist)', branch)
+
+
+@main.command()
+@click.option('-a', '--all', 'all_', is_flag=True)
+@click.option('-f', '--force', is_flag=True)
+@click.argument('selected', nargs=-1)
+@click.pass_obj
+def branch(ptt, all_, force, selected):
+    if not selected and not all_:
+        LOG.warning('no branches selected.')
+        return
+
+    for branch, commits in ptt.find_branches().items():
+        if selected and branch not in selected:
+            continue
+
+        if branch not in ptt.repo.heads:
+            LOG.warning('creating branch %s', branch)
+            ptt.repo.create_head(branch)
+        elif branch in ptt.repo.heads and force:
+            ref = ptt.repo.heads[branch]
+            LOG.warning('updating branch %s', branch)
+            ptt.repo.git.update_ref(ref.path, commits[0])
