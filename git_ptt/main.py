@@ -46,6 +46,14 @@ class PTT:
 
         return branches
 
+    def update_refs(self):
+        LOG.info('uppdating ptt refs')
+        for branch, commits in self.find_branches().items():
+            ref = f'refs/ptt/{branch}'
+            commit = commits[0]
+            LOG.debug('update ref %s to commit %s', ref, commit)
+            self.repo.git.update_ref(f'{ref}', commit)
+
     def branch_from_commit(self, rev):
         rev = self.repo.commit(rev)
         pattern = re.compile(r'^\s*{}(?P<branch>\S+)$'.format(self.marker),
