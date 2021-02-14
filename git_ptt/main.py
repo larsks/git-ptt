@@ -12,12 +12,14 @@ LOG = logging.getLogger(__name__)
 
 
 class PTT:
-    default_header = 'x-branch-name'
+    default_marker = '@'
+    default_base = 'master'
 
-    def __init__(self, repo, remote=None, header=None):
+    def __init__(self, repo, base=None, remote=None, marker=None):
         self.repo = repo
-        self.remote = self.get_remote(remote)
-        self.header = header or self.default_header
+        self.base = base or self.config.get('base') or self.default_base
+        self.remote = remote or self.config.get('remote')
+        self.marker = marker or self.config.get('marker') or self.default_marker
 
     def find_branches(self, refspec):
         if '..' in refspec:
@@ -43,7 +45,7 @@ class PTT:
 
     def branch_from_commit(self, rev):
         rev = self.repo.commit(rev)
-        pattern = re.compile(r'^\s*{}: (?P<branch>\S+)$'.format(self.header),
+        pattern = re.compile(r'^\s*{}(?P<branch>\S+)$'.format(self.marker),
                              re.IGNORECASE | re.MULTILINE)
         rev_message = rev.message
         try:
@@ -54,16 +56,6 @@ class PTT:
         for content in [rev_message, rev_note]:
             if match := pattern.search(content):
                 return match.group('branch')
-
-    def get_remote(self, remote):
-        if remote:
-            LOG.info('found remote %s from global config', remote)
-        elif remote := self.config.get('remote'):
-            LOG.info('found remote %s from git config', remote)
-        else:
-            LOG.info('no remote has been configured')
-
-        return remote
 
     @property
     def config(self):
