@@ -326,3 +326,31 @@ def stats(ptt):
 
     print(tabulate.tabulate(table,
                             headers=['branch', 'added', 'deleted', 'delta', 'files']))
+
+
+@main.command()
+@click.argument('target')
+@click.pass_obj
+def merge(ptt, target):
+    '''merge current branch back into stack'''
+    current_branch = ptt.repo.active_branch
+
+    try:
+        target = ptt.repo.heads[target]
+    except IndexError:
+        raise click.ClickException(f'no branch named {target}')
+
+    try:
+        source = ptt.get_branch(current_branch.name)
+    except KeyError:
+        raise click.ClickException(f'no mapped branch named {current_branch.name}')
+
+    LOG.warning('merging current branch@%s into %s@%s',
+                ptt.format_id(current_branch.commit.hexsha),
+                target.name,
+                ptt.format_id(target.commit.hexsha))
+    ptt.repo.git.rebase(
+        'HEAD',
+        target,
+        onto=source.head,
+    )
