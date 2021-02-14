@@ -7,6 +7,8 @@ import functools
 import git
 import logging
 import re
+import readline
+import rlcompleter
 import tabulate
 
 from dataclasses import dataclass, field
@@ -293,7 +295,10 @@ def branch(ptt, all_, force, selected):
 @click.pass_obj
 def shell(ptt):
     '''interactive shell with access to the PTT object'''
-    code.interact(local=locals())
+    vars = locals()
+    readline.set_completer(rlcompleter.Completer(vars).complete)
+    readline.parse_and_bind('tab: complete')
+    code.InteractiveConsole(vars).interact()
 
 
 @main.command()
