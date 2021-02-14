@@ -21,7 +21,10 @@ class PTT:
         self.remote = remote or self.config.get('remote')
         self.marker = marker or self.config.get('marker') or self.default_marker
 
-    def find_branches(self, refspec):
+    @functools.cache
+    def find_branches(self, refspec=None):
+        refspec = refspec or self.base
+
         if '..' in refspec:
             commits = self.repo.iter_commits(refspec)
         else:
