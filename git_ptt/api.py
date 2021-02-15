@@ -37,6 +37,10 @@ class InvalidRemoteError(ApplicationError):
     pass
 
 
+class BranchExistsError(ApplicationError):
+    pass
+
+
 class PTT:
     default_marker = '@'
     default_base = 'master'
@@ -89,7 +93,9 @@ class PTT:
 
         try:
             _config.update(dict(reader.items(f'ptt "{self.repo.head.ref.name}"')))
-        except configparser.NoSectionError:
+        except (TypeError, configparser.NoSectionError):
+            # trying to access a branch config when in a detached state
+            # raises a TypeError
             pass
 
         return _config
@@ -164,3 +170,36 @@ class PTT:
         for content in [rev_message, rev_note]:
             if match := pattern.search(content):
                 return match.group('branch')
+
+    def set_branch_config(self, branch, k, v):
+        LOG.debug('set config %s.%s = %s', branch, k, v)
+        with self.repo.config_writer() as writer:
+            writer.set_value(f'ptt "{branch}"', k, v)
+
+    def delete_branch_config_all(self, name):
+        with self.repo.config_writer() as writer:
+            writer.remove_section(f'ptt "{name}"')
+
+    def create_git_branch(self, name, head, stack=None):
+        branch = self.branches[name]
+
+        if branch.name not in self.repo.heads:
+            LOG.debug('creating branch %s@%s',
+                      branch.name, self.format_id(branch.head))
+            ref = self.repo.create_head(branch.name, commit=branch.head)
+            if stack:
+                self.set_branch_config(name, 'stack', stack.name)
+
+            return ref
+        else:
+            raise BranchExistsError()
+
+    def delete_git_branch(self, name, force=False):
+        branch = self.branches[name]
+
+        if branch.name in self.repo.heads:
+            LOG.debug('deleting branch %s@%s',
+                      branch.name, self.format_id(branch.head))
+            self.delete_branch_config_all(branch.name)
+            opt = '-D' if force else '-d'
+            self.repo.git.branch(opt, branch.name)

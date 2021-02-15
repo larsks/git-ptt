@@ -13,6 +13,7 @@ import tabulate
 from git_ptt.api import PTT
 
 LOG = logging.getLogger(__name__)
+UNDEFINED = object()
 
 
 def handle_git_error(func):
@@ -128,60 +129,114 @@ def delete(ptt, selected):
         ptt.remote.push(f':refs/heads/{branch.name}', force_with_lease=True)
 
 
-@main.command()
-@click.option('-f', '--force', is_flag=True)
+@main.group()
+def branch():
+    pass
+
+
+@branch.command()
+@click.option('--force', '-f', is_flag=True)
 @click.argument('name')
 @click.pass_obj
 def checkout(ptt, force, name):
+    '''checkout a git branch from a mapped branch'''
+
     try:
         branch = ptt.branches[name]
-    except KeyError:
-        raise click.ClickException(f'no mapped branch named {name}')
+    except KeyError as err:
+        raise click.ClickException(f'no such branch {err}')
+
+    try:
+        active_branch = ptt.repo.active_branch
+    except TypeError:
+        active_branch = None
 
     if branch.name not in ptt.repo.heads:
-        LOG.warning('creating branch %s @ %s', branch.name, ptt.format_id(branch.head))
-        ref = ptt.repo.create_head(branch.name, commit=branch.head)
-    elif branch.name in ptt.repo.heads and force:
-        ref = ptt.repo.heads[branch.name]
-        LOG.warning('updating branch %s', branch.name)
-        ptt.repo.git.update_ref(ref.path, branch.head)
+        LOG.warning('creating git branch %s@%s', branch.name, branch.head)
+        ref = ptt.create_git_branch(branch.name, branch.head, active_branch)
     else:
         ref = ptt.repo.heads[branch.name]
+
+        if ref.commit == branch.head or force:
+            LOG.warning('checking out git branch %s@%s',
+                        branch.name, branch.head)
+        else:
+            LOG.warning('checking out git branch %s@%s (out of sync)',
+                        branch.name, branch.head)
 
     ref.checkout()
 
 
-@main.command()
-@click.option('-a', '--all', 'all_', is_flag=True)
-@click.option('-f', '--force', is_flag=True)
-@click.option('--create/--purge', default=True)
+@branch.command()
+@click.option('--all/--no-all', '-a', 'all_')
+@click.option('--force/--no-force', '-f')
+@click.option('--continue/--no-continue', '-c', 'continue_')
 @click.argument('selected', nargs=-1)
 @click.pass_obj
-def branch(ptt, create, all_, force, selected):
-    if not selected and not all_:
-        LOG.warning('no branches selected.')
-        return
+def prune(ptt, all_, continue_, force, selected):
+    '''remove git branches that correspond to mapped branches'''
+
+    if selected is None and not all_:
+        raise click.ClickException('no branches to prune')
 
     for branch in ptt:
         if selected and branch.name not in selected:
             continue
 
-        if create:
-            if branch.name not in ptt.repo.heads:
-                LOG.warning('creating branch %s @ %s', branch.name, ptt.format_id(branch.head))
-                ptt.repo.create_head(branch.name, commit=branch.head)
-            elif branch.name in ptt.repo.heads and force:
-                ref = ptt.repo.heads[branch.name]
-                LOG.warning('updating branch %s', branch.name)
-                ptt.repo.git.update_ref(ref.path, branch.head)
-        else:
-            if branch.name in ptt.repo.heads:
-                ref = ptt.repo.heads[branch.name]
-                if ref.commit == branch.head or force:
-                    LOG.warning('removing branch %s', branch.name)
-                    ptt.repo.git.update_ref('-d', ref.path)
-                else:
-                    LOG.warning('not removing branch %s (not in sync)', branch.name)
+        if branch.name in ptt.repo.heads:
+            LOG.warning('deleting git branch %s', branch.name)
+            ref = ptt.repo.heads[branch.name]
+
+            if ref.commit != branch.head and not force:
+                LOG.error('not deleting %s (out of sync)', branch.name)
+                continue
+
+            try:
+                ptt.delete_git_branch(branch.name, force=True)
+            except git.exc.GitCommandError as err:
+                LOG.error('failed to delete branch %s: %s',
+                          branch.name, err)
+                if not continue_:
+                    raise
+
+
+@branch.command()
+@click.option('-s', '--stack')
+@click.option('-p', '--prune', is_flag=True)
+@click.argument('name', default=UNDEFINED)
+@click.pass_obj
+@handle_git_error
+def update(ptt, stack, prune, name):
+    '''replace mapped branch with current HEAD'''
+
+    if stack is None:
+        stack = ptt.config.get('stack')
+        if stack is None:
+            raise click.ClickException('no target stack defined (try --stack)')
+
+    stack = ptt.repo.refs[stack]
+
+    if name is UNDEFINED:
+        try:
+            current_branch = ptt.repo.active_branch
+        except TypeError:
+            raise click.ClickException('unable to determine mapped branch name')
+
+        name = current_branch.name
+
+    branch = ptt.branches[name]
+    current_head = ptt.repo.head.commit
+
+    LOG.warning('updating mapped branch %s in %s to %s',
+                branch.name,
+                stack.name,
+                ptt.format_id(current_head.hexsha),
+                )
+    ptt.repo.git.rebase(current_head, stack.name, onto=branch.head)
+
+    if prune:
+        LOG.warning('deleting git branch %s', branch.name)
+        ptt.delete_git_branch(branch.name)
 
 
 @main.command()
@@ -219,33 +274,3 @@ def stats(ptt):
 
     print(tabulate.tabulate(table,
                             headers=['branch', 'added', 'deleted', 'delta', 'files']))
-
-
-@main.command()
-@click.argument('target')
-@click.pass_obj
-@handle_git_error
-def merge(ptt, target):
-    '''merge current branch back into stack'''
-    current_branch = ptt.repo.active_branch
-
-    try:
-        target = ptt.repo.heads[target]
-    except IndexError:
-        raise click.ClickException(f'no branch named {target}')
-
-    target.checkout()
-
-    try:
-        source = ptt.branches[current_branch.name]
-    except KeyError:
-        raise click.ClickException(f'no mapped branch named {current_branch.name}')
-
-    LOG.warning('merging current branch@%s into %s@%s',
-                ptt.format_id(current_branch.commit.hexsha),
-                target.name,
-                ptt.format_id(target.commit.hexsha))
-    ptt.repo.git.rebase(
-        current_branch.commit,
-        onto=source.head,
-    )
