@@ -113,30 +113,6 @@ def delete(ptt, selected):
 
 @main.command()
 @click.option('-f', '--force', is_flag=True)
-@click.argument('selected', nargs=-1)
-@click.pass_obj
-def prune(ptt, force, selected):
-    '''remove local git branches that match mapped branches'''
-    for branch in ptt:
-        if selected and branch.name not in selected:
-            continue
-
-        if branch.name in ptt.repo.heads:
-            if ptt.repo.heads[branch.name].commit != branch.head and not force:
-                LOG.warning('skipping branch %s (not in sync)', branch.name)
-                continue
-            elif ptt.repo.heads[branch.name].commit != branch.head and force:
-                LOG.warning('deleting branch %s (not in sync)', branch.name)
-            else:
-                LOG.warning('deleting branch %s',  branch.name)
-
-            ptt.repo.git.branch('-D', branch.name)
-        else:
-            LOG.info('skipping branch %s (does not exist)', branch.name)
-
-
-@main.command()
-@click.option('-f', '--force', is_flag=True)
 @click.argument('name')
 @click.pass_obj
 def checkout(ptt, force, name):
@@ -161,9 +137,10 @@ def checkout(ptt, force, name):
 @main.command()
 @click.option('-a', '--all', 'all_', is_flag=True)
 @click.option('-f', '--force', is_flag=True)
+@click.option('--create/--purge', default=True)
 @click.argument('selected', nargs=-1)
 @click.pass_obj
-def branch(ptt, all_, force, selected):
+def branch(ptt, create, all_, force, selected):
     if not selected and not all_:
         LOG.warning('no branches selected.')
         return
@@ -172,13 +149,22 @@ def branch(ptt, all_, force, selected):
         if selected and branch.name not in selected:
             continue
 
-        if branch.name not in ptt.repo.heads:
-            LOG.warning('creating branch %s @ %s', branch.name, ptt.format_id(branch.head))
-            ptt.repo.create_head(branch.name, commit=branch.head)
-        elif branch.name in ptt.repo.heads and force:
-            ref = ptt.repo.heads[branch.name]
-            LOG.warning('updating branch %s', branch.name)
-            ptt.repo.git.update_ref(ref.path, branch.head)
+        if create:
+            if branch.name not in ptt.repo.heads:
+                LOG.warning('creating branch %s @ %s', branch.name, ptt.format_id(branch.head))
+                ptt.repo.create_head(branch.name, commit=branch.head)
+            elif branch.name in ptt.repo.heads and force:
+                ref = ptt.repo.heads[branch.name]
+                LOG.warning('updating branch %s', branch.name)
+                ptt.repo.git.update_ref(ref.path, branch.head)
+        else:
+            if branch.name in ptt.repo.heads:
+                ref = ptt.repo.heads[branch.name]
+                if ref.commit == branch.head or force:
+                    LOG.warning('removing branch %s', branch.name)
+                    ptt.repo.git.update_ref('-d', ref.path)
+                else:
+                    LOG.warning('not removing branch %s (not in sync)', branch.name)
 
 
 @main.command()
