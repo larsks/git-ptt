@@ -2,15 +2,32 @@
 
 import click
 import code
+import functools
 import git
 import logging
 import readline
 import rlcompleter
+import sys
 import tabulate
 
 from git_ptt.api import PTT
 
 LOG = logging.getLogger(__name__)
+
+
+def handle_git_error(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except git.exc.GitCommandError as err:
+            sys.stdout.write(err.args[3].decode())
+            sys.stdout.write('\n\n')
+            sys.stderr.write(err.args[2].decode())
+            sys.stderr.write('\n\n')
+            raise click.ClickException(f'git failed with status {err.status}')
+
+    return wrapper
 
 
 @click.group(context_settings={'auto_envvar_prefix': 'GIT_PTT'})
@@ -207,6 +224,7 @@ def stats(ptt):
 @main.command()
 @click.argument('target')
 @click.pass_obj
+@handle_git_error
 def merge(ptt, target):
     '''merge current branch back into stack'''
     current_branch = ptt.repo.active_branch
