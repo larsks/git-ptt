@@ -234,6 +234,8 @@ def merge(ptt, target):
     except IndexError:
         raise click.ClickException(f'no branch named {target}')
 
+    target.checkout()
+
     try:
         source = ptt.branches[current_branch.name]
     except KeyError:
@@ -244,7 +246,6 @@ def merge(ptt, target):
                 target.name,
                 ptt.format_id(target.commit.hexsha))
     ptt.repo.git.rebase(
-        'HEAD',
-        target,
+        current_branch.commit,
         onto=source.head,
     )
