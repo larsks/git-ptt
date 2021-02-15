@@ -269,6 +269,29 @@ def prune(ptt, force, selected):
 
 
 @main.command()
+@click.option('-f', '--force', is_flag=True)
+@click.argument('name')
+@click.pass_obj
+def checkout(ptt, force, name):
+    try:
+        branch = ptt.get_branch(name)
+    except KeyError:
+        raise click.ClickException(f'no mapped branch named {name}')
+
+    if branch.name not in ptt.repo.heads:
+        LOG.warning('creating branch %s @ %s', branch.name, ptt.format_id(branch.head))
+        ref = ptt.repo.create_head(branch.name, commit=branch.head)
+    elif branch.name in ptt.repo.heads and force:
+        ref = ptt.repo.heads[branch.name]
+        LOG.warning('updating branch %s', branch.name)
+        ptt.repo.git.update_ref(ref.path, branch.head)
+    else:
+        ref = ptt.repo.heads[branch.name]
+
+    ref.checkout()
+
+
+@main.command()
 @click.option('-a', '--all', 'all_', is_flag=True)
 @click.option('-f', '--force', is_flag=True)
 @click.argument('selected', nargs=-1)
