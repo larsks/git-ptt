@@ -83,10 +83,14 @@ def head(ptt, name):
 
 
 @main.command()
+@click.option('--all/--no-all', '-a', 'all_')
 @click.argument('selected', nargs=-1)
 @click.pass_obj
-def push(ptt, selected):
+def push(ptt, all_, selected):
     '''push mapped branches to remote'''
+    if not selected and not all_:
+        raise click.ClickException('nothing selected to push')
+
     for branch in ptt:
         if selected and branch.name not in selected:
             continue
@@ -124,10 +128,15 @@ def check(ptt):
 
 
 @remote.command()
-@click.pass_obj
+@click.option('--all/--no-all', '-a', 'all_')
 @click.argument('selected', nargs=-1)
-def prune(ptt, selected):
+@click.pass_obj
+def prune(ptt, all_, selected):
     '''delete mapped branches from remote repository'''
+
+    if not selected and not all_:
+        raise click.ClickException('nothing selected to prune')
+
     for branch in ptt:
         if selected and branch.name not in selected:
             continue
