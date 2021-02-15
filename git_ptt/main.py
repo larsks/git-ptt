@@ -75,7 +75,7 @@ def ls(ptt, show_commits, selected):
 def head(ptt, name):
     '''show head of mapped branch'''
     try:
-        branch = ptt.get_branch(name)
+        branch = ptt.branches[name]
         print(branch.head)
     except KeyError:
         raise click.ClickException(f'no such branch named {branch}')
@@ -235,7 +235,7 @@ def merge(ptt, target):
         raise click.ClickException(f'no branch named {target}')
 
     try:
-        source = ptt.get_branch(current_branch.name)
+        source = ptt.branches[current_branch.name]
     except KeyError:
         raise click.ClickException(f'no mapped branch named {current_branch.name}')
 
