@@ -83,6 +83,26 @@ def head(ptt, name):
 
 
 @main.command()
+@click.argument('selected', nargs=-1)
+@click.pass_obj
+def push(ptt, selected):
+    '''push mapped branches to remote'''
+    for branch in ptt:
+        if selected and branch.name not in selected:
+            continue
+        LOG.warning('pushing commit %s -> %s:%s', ptt.format_id(branch.head), ptt.remote, branch.name)
+        res = ptt.remote.push(f'+{branch.head}:refs/heads/{branch.name}')
+        if res:
+            LOG.warning(res)
+
+
+@main.group()
+def remote():
+    '''commands for dealing with remote repositories'''
+    pass
+
+
+@remote.command()
 @click.pass_obj
 def check(ptt):
     '''verify that mapped branches match remote references'''
@@ -103,24 +123,10 @@ def check(ptt):
         headers=['remote', 'branch', 'local ref', 'remote ref', 'in sync']))
 
 
-@main.command()
-@click.argument('selected', nargs=-1)
-@click.pass_obj
-def push(ptt, selected):
-    '''push mapped branches to remote'''
-    for branch in ptt:
-        if selected and branch.name not in selected:
-            continue
-        LOG.warning('pushing commit %s -> %s:%s', ptt.format_id(branch.head), ptt.remote, branch.name)
-        res = ptt.remote.push(f'+{branch.head}:refs/heads/{branch.name}')
-        if res:
-            LOG.warning(res)
-
-
-@main.command()
+@remote.command()
 @click.pass_obj
 @click.argument('selected', nargs=-1)
-def delete(ptt, selected):
+def prune(ptt, selected):
     '''delete mapped branches from remote repository'''
     for branch in ptt:
         if selected and branch.name not in selected:
@@ -131,6 +137,7 @@ def delete(ptt, selected):
 
 @main.group()
 def branch():
+    '''commands for dealing with local git branches'''
     pass
 
 
@@ -246,7 +253,7 @@ def shell(ptt):
     vars = locals()
     readline.set_completer(rlcompleter.Completer(vars).complete)
     readline.parse_and_bind('tab: complete')
-    code.InteractiveConsole(vars).interact()
+    code.InteractiveConsole(vars).interact(banner='PTT API available as "ptt" object')
 
 
 @main.command()
