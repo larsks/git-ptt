@@ -270,23 +270,19 @@ def shell(ptt):
 def stats(ptt):
     '''show summary diff statistics for each mapped branch'''
 
-    commits = [(branch.name, branch.hexsha) for branch in ptt]
-    master = ('master', ptt.repo.heads['master'].commit.hexsha)
     table = []
 
-    for b1, b2 in zip([None] + commits, commits + [master]):
-        if b1 is None:
-            continue
+    for branch in ptt:
+        t_added = t_deleted = t_files = t_lines = 0
+        for commit in branch.commits:
+            t_added += commit.stats.total['insertions']
+            t_deleted += commit.stats.total['deletions']
+            t_lines += commit.stats.total['lines']
+            t_files += commit.stats.total['files']
 
-        res = ptt.repo.git.diff(b2[1], b1[1], numstat=True)
-        t_added = t_deleted = t_files = 0
-        for line in res.splitlines():
-            added, deleted, fn = line.split(None, 2)
-            t_added += int(added)
-            t_deleted += int(deleted)
-            t_files += 1
-
-        table.append((b1[0], t_added, t_deleted, t_added-t_deleted, t_files))
+        table.append((
+            branch.name, t_added, t_deleted, t_lines, t_added-t_deleted, t_files,
+        ))
 
     print(tabulate.tabulate(table,
-                            headers=['branch', 'added', 'deleted', 'delta', 'files']))
+                            headers=['branch', 'added', 'deleted', 'lines', 'net', 'files']))
