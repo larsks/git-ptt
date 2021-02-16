@@ -101,7 +101,9 @@ class PTT:
         return _config
 
     def update_branches(self):
-        commits = self.repo.iter_commits(f'{self.base.hexsha}..HEAD')
+        commits = self.repo.head.commit.traverse(
+            prune=lambda i, d: i == self.base,
+        )
 
         bundle = []
         branches = {}
