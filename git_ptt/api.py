@@ -150,14 +150,14 @@ class PTT:
                     LOG.debug('create ref %s (%s)',
                               ref.path, branch.head)
 
-                self.repo.git.update_ref(ref.path, self.format_id(branch.head))
+                ref.set_commit(branch.head)
 
         # purge obsolete refs
         for ref in self.repo.refs:
             if ref.path.startswith('refs/ptt/'):
                 if ref.name not in self:
                     LOG.debug('delete ref %s', ref.path)
-                    self.repo.git.update_ref('-d', ref.path)
+                    ref.delete(self.repo, ref.path)
 
     def branch_from_commit(self, rev):
         rev = self.repo.commit(rev)
