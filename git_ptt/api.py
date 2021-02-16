@@ -141,16 +141,16 @@ class PTT:
 
             if ref.is_valid() and ref.commit == branch.head:
                 LOG.debug('not updating %s (%s == %s)',
-                          ref.path, ref.commit, branch.head)
+                          ref.path, self.format_id(ref.commit), self.format_id(branch.head))
             else:
                 if ref.is_valid():
                     LOG.debug('update ref %s (%s -> %s)',
-                              ref.path, ref.commit, branch.head)
+                              ref.path, self.format_id(ref.commit), self.format_id(branch.head))
                 else:
                     LOG.debug('create ref %s (%s)',
                               ref.path, branch.head)
 
-                self.repo.git.update_ref(ref.path, branch.head)
+                self.repo.git.update_ref(ref.path, self.format_id(branch.head))
 
         # purge obsolete refs
         for ref in self.repo.refs:
