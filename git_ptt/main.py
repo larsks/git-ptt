@@ -119,7 +119,9 @@ def check(ptt):
 
         in_sync = local_ref == remote_ref
         results.append(
-            (ptt.remote, branch.name, ptt.format_id(local_ref), ptt.format_id(remote_ref), in_sync)
+            (ptt.remote, branch.name, ptt.format_id(local_ref),
+             '-' if remote_ref == '-' else ptt.format_id(remote_ref),
+             in_sync)
         )
 
     print(tabulate.tabulate(
